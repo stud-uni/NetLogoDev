@@ -1,0 +1,429 @@
+; File with the "to-go"- functionality of cops-agents
+
+; FILE HISTORY:
+
+; 2022-04-10 Initial template, gks
+; 
+; 2023-05-11 Added update-town-square-matrix function, Group 7(Anton Satow, Zainab Alfredji, Ted Ljungsten)
+; 2023-05-11 Added if (performative = "inform") message, Group 7(Anton Satow, Zainab Alfredji, Ted Ljungsten)
+; 2023-05-11 Added logic to perceive-cop-env, logic to at-policeStation, logic to go-to Group 1 (Adam Joseph, Teddie Ohrslin, Johan Alvarado)
+;            Got help with sending req msg only to same cop agents and not sending to self (Helpers: Zainab Alfredji, Anton Satow, Simon Winoy)
+; 2023-05-11 Added task 8.42 functionality, mainly to report citizen amount, Group 2 (Alameer Al-Badrani, Samuel Peltomaa Åström, Simon Winoy, Sinan Sabree)
+; 2023-05-11 Combined tasks 8.41 & 8.42, Group 2 (Alameer Al-Badrani, Samuel Peltomaa Åström, Simon Winoy, Sinan Sabree) with help from Group 1 (Johan Alvarado Rodriguez, Adam Joseph, Teddie Ohrslin)
+; - Added functionality to check messages, especially for checking if backing up. 
+; - Updated function: to perceive-cop-env
+; - Added function: to evaluate-cop-belief
+; - Added function: to send-cop-msg [message-type content receiver] 
+; - Added function: to move-freely
+; - Added function: to walk-heading 
+; - Added function: to call-backup
+;---------------------------------------------------
+; 2023-05-18 Group 4(Anton, Andreas, Marcus);
+; - Added a method for the chief of police to assign ranks to the police
+; 2023-05-21 Group 5 (Anas A, Hussein J)
+; -Modified Assign ranks function and added methods needed to handle officers for task 8.32
+
+
+
+
+
+; ******************* PROCESS MESSAGES *****************
+; reading messages
+to process-cop-msg
+  ;print word who ": cop-messages processed"
+  
+  ;let msg get-message
+  ;if not (msg = "no_message") [
+     ;let content get-content msg
+     ;let performative get-performative msg
+  
+  ; -------------------- ADDED FROM GROUP 3 --------------------
+  let performative ""
+  let msg_content ""
+  let msg ""
+  let sender ""
+
+  while [not empty? incoming-queue] [   
+
+   set msg get-message
+   set sender get-sender msg
+   set performative get-performative msg
+   set msg_content get-content msg
+      
+   let x_content item 0 get-content msg
+   let y_content item 1 get-content msg
+    
+   if performative = "backup" [
+      
+      update-belief create-belief "on-patrol" true
+      
+      set head-x x_content
+      set head-y y_content
+      
+    ]
+    ; ------------------------------------------------------------------- 
+    
+    ;Added group 5 
+     if (performative = "informGrunt")[
+      if msg_content = "officerToFollow"[
+        add-intention "follow-officer" "true"
+      ]
+    ]
+    ;-------------------------------------------
+    
+      
+    if (performative = "request")[
+      if msg_content = "Report Cluster" [
+        add-intention "start-patrolling" "true"
+      ]
+      if msg_content = "Stop Report Cluster" [
+        add-intention "start-patrolling" "false"
+      ]
+    ]
+    
+    if (performative = "inform")[
+      if title = "chief" [
+        let x item 0 msg_content
+        let y item 1 msg_content
+        let nbr-citizens item 2 msg_content
+        
+        update-town-square-matrix x y nbr-citizens
+      ]
+    ]
+  ]
+end ;- process-cop-msg
+
+
+; ******************* PERCEIVE ENVIRONMENT *****************
+; Updating beliefs
+to perceive-cop-env
+  ;print word who ": perceive-cop-env"
+  
+  ; -------------------- ADDED /GROUP 3 -------------------- 
+  let is-chief exist-beliefs-of-type "i-am-chief"
+  let is-officer exist-beliefs-of-type "i-am-officer"
+  
+  if is-chief = true [
+    let other-activists other turtles with [breed = citizens AND activist? = true]
+    if count other-activists in-radius vision_range >= 3 [
+        call-backup
+    ] 
+  ]
+  
+  let patroool item 1(read-first-belief-of-type "on-patrol")
+  
+  ifelse patroool = true [
+    add-intention "walk-heading" "true" 
+  ] 
+  [
+    add-intention "move-freely" "true"
+  ]
+  ; ---------------------------------------------------------
+  
+  
+  
+  if title = "chief" [
+    ;set color red   ; just an example, you can customize the chief agent's properties as needed
+    ;set chief? true ; mark the agent as the chief
+    set placeToGo "policeStation"
+    let police-cheif-belief create-belief "Police Chief" true
+    update-belief police-cheif-belief
+  ]
+end ;- perceive-cop-env
+
+; -------------------- ADDED /GROUP 3 -------------------- 
+to call-backup
+  let message-type "backup"
+  let content (list xcor ycor)
+  
+  let target nobody
+  
+  let nearby-officers other turtles with [breed = cops] in-radius (vision_range * 3)
+  set target min-one-of nearby-officers [xcor + ycor]
+ 
+   if target != nobody [
+    send-cop-msg message-type content target
+  ]
+end
+
+to move-freely
+    rt random 50
+    lt random 50
+    fd 1
+end
+ 
+to send-cop-msg [message-type content receiver]
+  
+  let msg create-message message-type	; create the message with the performative
+  set msg add-receiver [who] of receiver msg 	; add receiver to the message
+  set msg add-content content msg 	; add content to the message
+  
+  add-intention "send " msg 
+  
+end 
+
+
+to walk-heading 
+  
+  ;ifelse list xcor ycor = list head-x head-y [
+  ifelse distance (patch head-x head-y) <= 2 [
+    
+    update-belief create-belief "on-patrol" false
+    set color blue
+    
+  ] 
+  [
+    set color yellow
+    facexy head-x head-y
+    fd 1
+    
+    let target nobody
+    let activists-on-the-way other turtles with [breed = citizens AND activist? = true ] 
+    if any? activists-on-the-way in-cone 4 180 [ 
+       
+      set target min-one-of activists-on-the-way [xcor + ycor]
+      ask target [
+        set next_state [ -> being-arrested ]
+      ]
+      ;send-cop-msg "arrest" "you are arrested" target
+      
+    ]
+  ]
+  
+end
+; ------------------------------------------------------- 
+
+
+
+
+to update-town-square-matrix [x y nbr-of-citizens]
+  let matrix-x 0
+  let matrix-y 0
+
+  if x < [pxcor] of locTownSquare + [pxcor] of locTownSquare / 3 [
+    set matrix-x 0
+  ] 
+  if x >= [pxcor] of locTownSquare + [pxcor] of locTownSquare / 3 and x < [pxcor] of locTownSquare + [pxcor] of locTownSquare * 2 / 3 [
+    set matrix-x 1
+  ]
+  if x >= [pxcor] of locTownSquare + [pxcor] of locTownSquare * 2 / 3 [
+    set matrix-x 2
+  ]
+
+  if y < [pycor] of locTownSquare + [pycor] of locTownSquare / 3 [
+    set matrix-y 0
+  ] 
+  if y >= [pycor] of locTownSquare + [pycor] of locTownSquare / 3 and y < [pycor] of locTownSquare + [pycor] of locTownSquare * 2 / 3 [
+    set matrix-y 1
+  ]
+  if y >= [pycor] of locTownSquare + [pycor] of locTownSquare * 2 / 3 [
+    set matrix-y 2
+  ]
+
+  let current-citizens matrix:get town-square-matrix matrix-x matrix-y
+  matrix:set town-square-matrix matrix-x matrix-y (current-citizens + nbr-of-citizens)
+end
+
+
+
+;******************* INTENTIONS *****************
+
+to start-patrolling
+  set placeToGo "townSquare"
+end
+
+to stop-patrolling
+  set placeToGo "policeStation"
+end
+
+;Grupp 4 ***********************************
+;Modified by group 5 to handle messages and assign subgroups
+to assign-police
+  let counter 0
+  let tempOfficer nobody
+  let subgroups []
+  let subgroupLabels []
+
+  ask cops with [not (title = "chief")] [
+    ifelse (counter mod 3) = 0 [
+      set title "officer"
+      set tempOfficer self
+
+      let newSubgroup (list self)
+      set subgroups lput newSubgroup subgroups
+
+      let subgroupLabel (word "Subgroup " (length subgroups))
+      set subgroupLabels lput subgroupLabel subgroupLabels
+      set color yellow  ; Set officer color to yellow
+    ]
+    [
+      set title "grunt"
+      set officerToFollow tempOfficer
+
+      let currentSubgroup item ((counter / 3) - 1) subgroups
+      set currentSubgroup lput self currentSubgroup
+
+      set color green  ; Set grunt color to green
+
+      ; Convert officerToFollow to string since content cannot handle turtle input
+      let content (word officerToFollow)  
+
+      ; Send message from chief to grunts
+      ask self [
+    ifelse any? (cops with [title = "grunt"]) [
+          set officerToFollow tempOfficer
+          let sender self 
+          let performative "informGrunt"
+          let receiver (cops with [title = "grunt"])
+          let msg create-message performative 
+          set msg add-content content msg
+          broadcast-to receiver msg sender
+  ] [
+          set next_state [ -> act-self ]
+  ]
+]
+    ]
+    set counter counter + 1
+  ]
+
+  ask turtles with [title = "chief"] [
+    ;set color red  ; Set chief color to red
+  ]
+end
+
+;***********************************
+      
+; ******************* FINITE STATE MACHINE *****************
+; Running the current state
+
+to at-policeStation
+  if title = "chief"[
+    if empty? cop-list [
+      let total-cops count turtles with [breed = cops] ; Get the count of cop agents
+      let selected-cops round(total-cops * 0.2) ; Calculate 20% of total cops
+      set cop-list sort n-of selected-cops turtles with [breed = cops and title = "officer" ] ; Select a random 20% of cop agents
+    ] 
+    let performative "request"
+    let content "Report Cluster"
+    let msg create-message performative
+    set msg add-content content msg
+    foreach cop-list [i ->  ; For each cop in the list
+      set msg add-receiver [who] of i msg  ; Add the cop as a receiver of the message
+    ]
+    set msg add-sender self msg
+    send msg
+  ] 
+  
+  if title = "officer" [
+    if placeToGo = "townSquare" [
+      set next_state [ -> go-to ]
+    ]
+  ]
+  
+  if title = "grunt"[set next_state [ -> follow-officer] ]
+    
+end
+
+;Added group 5 Grunts that do not have officer to follow
+to act-self 
+  ask turtles with [title = "grunt"] [
+    let preferred-direction random 360
+    if officerToFollow != nobody [
+      face officerToFollow
+      forward 1
+    ] if officerToFollow = nobody [
+  ; Randomly select a direction to walk towards, preferring direction with civilians
+  
+  let max-civilians -1
+  repeat 360 [
+    set heading preferred-direction
+    fd 1
+    let civilians-in-view count citizens in-cone 180 10 ;
+    if civilians-in-view > max-civilians [
+    set max-civilians civilians-in-view
+     set heading preferred-direction
+    ]
+  ]
+  fd 1
+]
+  ]
+end 
+
+
+to follow-officer
+  if officerToFollow != nobody [
+    face officerToFollow
+    forward 1
+  ] 
+ if officerToFollow = nobody [
+    ; Code for grunts to walk around randomly and spot civilians
+    set placeToGo "townSquare"
+    add-intention "walk-heading" "true"
+  ]
+end
+
+to patrol-town-square
+  let nbr-of-citizens count other citizens in-radius vision_range
+  
+   if nbr-of-citizens > 5 [    
+    let sender self
+    let performative "inform"
+    let receiver (cops with [title = "chief"])
+    let content (list xcor ycor nbr-of-citizens)
+    let msg create-message performative 
+    
+    ;set msg add-sender sender msg
+    set msg add-content content msg
+    ;set msg add-receiver receiver msg
+    ;send msg
+    
+    broadcast-to receiver msg sender
+  ]
+  
+  let movementAllowence patches with [region = "townSquare"] in-radius vision_range
+  move-to one-of movementAllowence
+  
+  if placeToGo = "policeStation" [
+    set next_state [ -> go-to ]
+  ]
+end
+
+to go-to
+  let goToRegion placeToGo
+  let targetPatch patches with [region = goToRegion]
+  ifelse any? targetPatch in-radius vision_range 
+  [
+    move-to one-of targetPatch
+    if goToRegion = "townSquare" [ set next_state [ -> patrol-town-square ] ]
+    if goToRegion = "policeStation" [ set next_state [ -> at-policeStation ] ]
+  ]
+  [  
+      let movementAllowence patches with [region = "empty" or region = "townSquare"] in-radius vision_range
+      move-to min-one-of movementAllowence [distance one-of targetPatch]  
+  ]
+end
+
+;Grupp 4 ***********************************
+to assignPoliceState
+  ;show "assigning cops"
+  ifelse policeAssignmentComplete = true [ set next_state [ -> at-policeStation ] ]
+  [add-intention "assign-police" "true"
+   set policeAssignmentComplete true
+  ]
+end
+
+to idleState
+  if policeAssignmentComplete = true [
+    if title = "officer" [
+      set next_state [ -> at-policeStation ]
+      show "I am an officer"
+    ]
+    
+    if title = "grunt" [
+      set next_state [ -> at-policeStation ]
+      show "I am a grunt"
+    ]
+  ]
+end
+;******************************************************
+

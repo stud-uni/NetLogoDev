@@ -1,0 +1,972 @@
+; File with the "to-go"- functionality of citizen-agents
+
+; FILE HISTORY:
+
+; 2022-04-10 Initial template, gks
+; 2023-04-13 Added work at factory intention, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
+; 2023-04-14 Rewrote belief system, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
+; 2023-04-20 Updated the entertainment belief and working at factory state, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
+; 2023-04-27 Added the template states, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
+; 2023-04-27 Group 4 (Anton, Marcus & Andreas)
+; - Created the state go-to-work (the citizen moves towards their work place's door)
+; - Created the state move-at-work (move around inside the work region while at work)
+; - Created the state exit-work-building (exit the work building by moving to the door patch (currently shown with the red patch))
+; - Created the state go-home (citizens make their way home via either empty patches or townsquare patches)
+; 2023-05-02 Modified move-at-work, go-to-work and added comments to states, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
+; 2023-05-11 Integrated task 8.45 and 11.9 Group 3 Anna Selstam, Malin Ramkull, Wael Mahrous: 
+; - Added functionality to check messages
+; - Added function: to-report estimated-arrest-probability 
+; - Added function: to at-townSquare 
+; - Added if patch-type-check = "townSquare" in perceive-citizen-env
+; - Added function: being-arrested
+; 2023-05-17 Group 3 Anna Selstam, Malin Ramkull, Wael Mahrous: 
+; - Added function: send-citizen-msg
+; - Added to function: at-home
+; - Added to function: walk-around-freely
+; - Added function: to-report net-risk
+; - Added functionality for if performative = "friend-request"
+; - Updated next state functionality for being-arrested
+; - Added next state functionality for going-to-prison and at-prison
+; 2023-05-18 Group 4 (Anton, Marcus & Andreas)
+; - Added a to-report function "isFrustrationBiggerThanFear", returns true if frustration is biggger than fear, otherwise false and increases frustration
+; 2023-05-18 Group 5 (Hedda E, Alicia S, Robin Z)
+; - Added preferences and decision making while at home, deciding whether or not to organize a demonstration.
+; 2023-05-18 Group 10 (Felix B , Lucas H , Johan Ay)
+; - Added methods evaluate-manager and demo-inv part of task 8.11
+; 2023-05-18 Code task 8.11, 8.12, 8.13, 8.14, 8.15 (Felix B., Lucas H., Johan Ay., Chahed M., Judy S., Fatima A., Hanan A., Hedda E., Alicia S., Robin Z., Rabaa K.)
+; 2023-05-18 Group 9 (Chahed M., Judy S.,Rabaa K.)
+; -  Code task 11.7 Added preferences and decision making while at home, deciding whether or not to meet a friend.
+; 2023-05-20 Group 7(Anton Satow, Zainab Alfredji, Ted Ljungsten)
+; - Added functionality/beliefs into at-townSquare
+; 2023-05-20 Group 6 (Hedda E, Alica S, Robin Z)
+; - code for task 7.72
+; 2023-05-21 Integrated Task 11.2, Group 2 (Alameer Al-Badrani, Samuel Peltomaa Åström, Simon Winoy, Sinan Sabree)
+; - Added functionality for increasing/decreasing furstration at work thorugh the 'salary' and 'frustration' variables
+; 2023-05-21 Integrated Task 11.8 Group 5 (Anas Abdullahi , Hussein Jaber)
+; - Added references and decision making whether or not to participate at a demonstration while at home.
+;2023-05-22 Integrated Task 11.12 Group 11 ( Fatima A, Hannan A)
+; - Added references and decision making deciding whether or not to go to a restaurant.	
+;2023-05-23 Task 11.5 Group 1 (Adam J, Johan A, Teddie O)
+; - Added logic in reactive part to increase fear, added logic to evaluate-belief, added logic to at-home
+;2023-05-23 Task 11.3 Group 10 (Lucas H, Felix B, Johan Ay)
+; - Added methods for task 11.3 under misc in citizens file and to runtime
+
+; 2023-06-04 Anna Selstam debug of whole program. 
+; - Fixed all sections in process-citizen-msg
+; - Fixed all send-citizen-msg calls
+; - Fixed use-social-media 
+; - Fixed demo-inv
+;---------------------------------------------------
+
+
+; ******************* PROCESS MESSAGES *****************
+; reading messages
+to process-citizen-msg
+  ; print word who ": citizen-messages processed"
+  let performative ""
+  let msg_content ""
+  let type_content ""
+  let msg ""
+  let sender ""
+  let myList []
+  
+  while [not empty? incoming-queue] [
+    set msg get-message
+    set sender get-sender msg
+    set performative get-performative msg
+    set msg_content get-content msg
+    
+    if performative = "award" [
+      if (msg_content = "Time 10 pm") [
+        set plannedToDemonstrate true
+      ]
+    
+    ]
+    
+    ; -------------------- ADDED FOR TASK 7.72/ANNA -------------------- 
+    
+    if performative = "friend-request" [
+      ;print (word who ": I received a friend request from: " sender) ; flag, you can de-comment
+      
+      if not member? sender friendsList [
+        set friendsList lput (turtle read-from-string sender) friendsList
+        ;print (word who ": I added: " turtle read-from-string sender " to my friendsList") ; flag, you can de-comment
+      ]
+      
+      ;print (word who ": my friends <3 : " friendsList) ; flag, you can de-comment
+    ]
+    ; ------------------------------------------------------------------- 
+    
+        
+    ; -------------------- ADDED FOR TASK 7.71/ Group 6 -------------------- 
+    if ((performative = "chat-request") or (performative = "chat-msg"))[
+      ;print (word who ": I received a chat-request: " sender) 
+      ;if message precived from citizen with same frustration or fear, get more frustrated "triggering each other" 
+      set frustration random 10 + frustration
+    ]
+    ; ------------------------------------------------------------------- 
+    
+    ; -------------------- ADDED FOR TASK 8.11-15/Group 6, 10, 9, 11 -------------------- 
+    ;Forward request from manager to demonstrate and set sender as manager so everyone can reply to manager directly.
+    if (msg_content = "demonstrationRequest")[
+      
+      if (performative = "request") [ 
+        
+        ;print("ENTERING SPREADMSG")
+        set manager (turtle read-from-string sender) ;get-sender msg
+        ;print (word who ": Manager: " manager)
+        
+        ;print (word who ": Trying to send spreadMsg.")
+ 
+        foreach friendsList [
+          x -> send-citizen-msg "requestSpread" "demonstrationRequest" manager x
+        ]
+        ;let spreadMsg create-message "requestSpread"
+        ;set spreadMsg add-sender manager spreadMsg
+        ;set spreadMsg add-content "demonstrationRequest" spreadMsg
+        ;set spreadMsg add-multiple-receivers friendsList spreadMsg     
+        ;add-intention "send" spreadMsg
+        ;print (word who ": Successfully sent spreadMsg.")
+        
+          ifelse (((frustration > 50) and (Fear < 70) and (R < 70)))[
+          ;print (word who ": Trying to send attending reply.")
+          
+          send-citizen-msg "Reply" "Attending" self manager 
+          ;set msg create-message "Reply"
+          ;set msg add-content "Attending" msg
+          ;set msg add-receiver manager msg
+          ;set msg add-sender [who] of self msg
+          ;add-intention "send" msg
+          ;print (word who ": Successfully sent attending reply.")
+        ][
+          ;reply not attending
+          ;print (word who ": Trying to send NOT attending reply.")
+          
+          send-citizen-msg "Reply" "Not-Attending" self manager
+          ;set msg create-message "Reply"
+          ;set msg add-content "Not-Attending" msg
+          ;set msg add-receiver manager msg
+          ;set msg add-sender [who] of self msg
+          ;add-intention "send" msg
+          ;print (word who ": Successfully sent NOT attending reply.")
+        ] 
+      ]  
+     
+      if (performative = "requestSpread") [   
+        ;print (word who ": Trying to send spread attending reply.")
+        ifelse (((frustration > 50) and (Fear < 70) and (R < 70)))[
+          ;print "Attending"
+          send-citizen-msg "Reply" "Attending" self manager
+          ;set msg create-message "Reply"
+          ;set msg add-content "Attending" msg
+          ;set msg add-receiver manager msg
+          ;set msg add-sender [who] of self msg
+          ;add-intention "send" msg
+          ;print (word who ": Successfully sent spread attending reply.")
+        ][
+          ;print "not attending"
+          ;print (word who ": Trying to send spread NOT attending reply.")
+          send-citizen-msg "Reply" "Not-Attending" self manager
+          ;set msg create-message "Reply"
+          ;set msg add-content "Not-Attending" msg
+          ;set msg add-receiver manager msg
+          ;set msg add-sender [who] of self msg
+          ;add-intention "send" msg
+          ;print (word who ": Successfully sent NOT spread attending reply.")
+        ] 
+      ]
+    ]
+    
+    ; The managers receive the confirmation mails and build lists of possible participants.
+    if ( (performative = "Reply") and (msg_content = "Attending") ) [
+      ;print "reply received"
+      ;print (word who ": Trying to add possible participants.")
+      let possible-participants (turtle read-from-string sender) ;get-sender msg
+      
+      if not(member? possible-participants myList)[    ; to prevent dublication of citizens in list  
+      ;  print (word who ": i added the possible-participant: " possible-participants " to mylist")
+        set  mylist lput possible-participants mylist   
+      ]
+      ;print (word who ": Successfully added possible participants")
+      ;print mylist 
+    ]
+    
+    ;Subtask 5: Check if enough potential demonstrators are available to activate the demonstrators   ;Added by Rabaa
+    ifelse (not empty? mylist) [
+      ;print "DEMONSTRATE"
+      ;print (word who ": Trying to send award msg.")
+      ; Send awarding message to potential demonstrators with the time or number of tick to leave home and go to Town Square
+      
+      foreach mylist [
+        x -> send-citizen-msg "award" "Time 10 pm" (turtle read-from-string sender) x
+        set mylist remove x mylist
+      ]
+      
+      
+      ;let awarding-msg create-message "award"
+      ;;let awarding-time ticks
+      ;;set awarding-msg add-sender manager awarding-msg
+      
+      ;print (word who ": flag for awardmsg: sender: " (turtle read-from-string sender))
+      ;set awarding-msg add-sender (turtle read-from-string sender) awarding-msg
+      ;;set awarding-msg add-content awarding-time awarding-message
+      ;set awarding-msg add-content "Time 10 pm" awarding-msg
+      
+      ;print (word who ": flag for awardmsg: receivers: " mylist)
+      ;set awarding-msg add-multiple-receivers mylist awarding-msg
+      ;;set awarding-msg add-multiple-receivers possible-participants awarding-msg
+      ;add-intention "send" awarding-msg
+      ;print (word who ": Successfully sent award msg.")
+    ][
+      ;Print a message indicating that there are not enough potential demonstrators
+      ;print "Not enough potential demonstrators to activate"
+    ]
+    
+  ]
+   ; -------------------------------------------------------------------  
+  
+end ;- process-citizen-msg
+
+
+; ******************* PERCEIVE ENVIRONMENT *****************
+; Updating beliefs
+to perceive-citizen-env
+  ;print word who ": citizen environment perceived"
+  ; test:
+  ; put the intention test-citizen-intention onto the intention stack
+  
+  ; Update all beliefs
+  
+ 
+  
+  
+  evaluate-belief
+
+  
+  ; Reactive part of the agent
+  ; The reactive intentions are added to the intention stack here.
+  
+  ;-------- Added for task 11.5 /Group 1 -----------------
+  let content1 item 1 (read-first-belief-of-type "police-around")
+  if content1 [
+    set fear (fear + (fear * 0.02))
+    set fear-happened true
+  ]
+  
+    
+  ;--- if belief "arrested" is implemented, use this below --------
+  
+;  let content2 item 1 (read-first-belief-of-type "arrested")
+;  if content2 [
+;      set fear (fear + (fear * 0.05)
+;      set fear-happend true
+    
+  ; Intention for checking in at the factory.
+  let current-patch patch-here ; check if on factory patch  
+  let patch-type-check [region] of current-patch   ; Get the current patch here type
+
+  if patch-type-check = "factory" [
+    add-intention "check-in" "check-in-done"
+  ]
+  
+    ; -------------------- ADDED /Group 3 -------------------- 
+  if patch-type-check = "townSquare" [
+    add-intention "at-townSquare" "true"
+  ]
+  ; ------------------------------------------------------------------- 
+  
+   
+  ; -------------------- ADDED FOR TASK 8.11 /Group 10 -------------------- 
+  evaluate-manager
+  check-talked-today
+  update-frustration
+  
+  
+  ; ------------------------------------------------------------------- 
+
+  
+  ; More add-intentions can be added here
+  
+end ;- perceive-citizen-env
+
+; In this function all the beliefs are updated 
+to evaluate-belief
+  
+  ; Set the belief "can-work", which indicates if the agent beliefs that it can work today
+  ; Check if the can-work belief exist
+  let work-belief-exist exist-beliefs-of-type "can-work"
+  
+  if work-belief-exist = true [
+    
+    ifelse flagEvening = true or flagWeekend = true or flagMorning = false or factory-workers-current >= factory-workers-current-max [
+      let can-work-belief-update create-belief "can-work" false
+      update-belief can-work-belief-update
+    ] [
+      let can-work-belief-update create-belief "can-work" true
+      update-belief can-work-belief-update
+    ]
+    
+  ]
+  
+  ; Set the belief "want-entertainment", which indicates if the agent beliefs that
+  ; it wants to go to the entertainment place 
+  let entertainment-belief-exist exist-beliefs-of-type "want-entertainment"
+  
+  if entertainment-belief-exist = true [
+    
+    ifelse flagEvening = true and entertained <= 20 [
+      let want-entertainment-belief-update create-belief "want-entertainment" true
+      update-belief want-entertainment-belief-update
+    ] [
+      let want-entertainment-belief-update create-belief "want-entertainment" false
+      update-belief want-entertainment-belief-update
+    ]
+  ]  
+  
+ 
+  ; Add code for belief update here
+  
+  ; ------- ADDED FOR TASK 11.5 / Group 1 --------------
+  let cop-around-belief-exist exist-beliefs-of-type "police-around"
+  
+  if cop-around-belief-exist = true [
+    ifelse count cops in-radius vision_range > 1 [
+      let cops-around-belief-update create-belief "police-around" true
+      update-belief cops-around-belief-update
+    ][
+      let cops-around-belief-update create-belief "police-around" false
+      update-belief cops-around-belief-update
+    ]
+  ]
+end 
+
+
+;******************* INTENTIONS *****************
+; procedures that are put onto the intention stack and that are executed
+; to test this testfunction you will need to put it onto the intention stack of the citizen
+
+to check-in
+  if factory-workers-current <= factory-workers-current-max and flagMorning = true and employed? = false [
+    set factory-workers-current factory-workers-current + 1
+    set employed? true
+  ]
+end
+
+; ******************* INTENTION CHECKS *****************
+; Metod(s) for checing if an intention is done. 
+
+to-report check-in-done
+  report true
+end
+
+; ******************* FINITE STATE MACHINE *****************
+; Running the current state
+
+
+
+; -------------------- ADDED FOR TASK 11.9/11.10 and 7.72/ANNA, GROUP 7 -------------------- 
+to-report estimated-arrest-probability
+  
+  let k 2.3 ;experiment with the value of k or look it up its suggested value from the research papers
+  
+  let c count (cops-on patches with [region = "townSquare"])
+  let a 1 + count (citizens-on patches with [region = "townSquare"]) ;needs to be changed to count activists instead of citizens
+  
+  report 1 - exp (- k * floor (c / a)) 
+  
+end
+
+to-report net-risk
+  report R * estimated-arrest-probability
+end
+
+to at-townSquare
+  ;print (word who ": EAP: " estimated-arrest-probability)
+  ;print (word who ": Frustration: " frustration)
+  ;print (word who ": Fear: " fear)
+
+  let i-am-demonstrating item 1(read-first-belief-of-type "demonstrate")
+  let fight item 1(read-first-belief-of-type "fight")
+  let run-away item 1(read-first-belief-of-type "run-away")
+
+  ifelse i-am-demonstrating = "false" [
+    if any? cops in-radius vision_range[
+      if frustration >= fear * estimated-arrest-probability [
+
+        ;print word who ": i want to demonstrate!" ;flag, you can de-comment
+        set color red
+        set activist? true
+        update-belief create-belief "demonstrate" true
+        update-belief create-belief "fight" true
+        update-belief create-belief "run-away" false
+        ;demonstrate and fight
+
+        ; add functionality for demonstration here 
+      ]
+    ]
+  ]
+  [
+    if any? cops in-radius vision_range[
+      if frustration < fear * estimated-arrest-probability [
+        ;print word who ": i want to run away!" ;flag, you can de-comment
+        set color white
+        set activist? false
+        update-belief create-belief "demonstrate" false
+        update-belief create-belief "fight" false
+        update-belief create-belief "run-away" true
+        ;run-away
+
+        random_walk
+        ; add functionality to go back to normal life here 
+      ]
+    ]
+  ]
+end
+
+
+to being-arrested
+  ;print (word who ": i am arrested!") ;flag, you can de-comment
+  
+  ; add functionality for arrest here, move the three lines below to functionality
+  set color white
+  set activist? false
+  update-belief create-belief "demonstrate" false
+  set next_state [-> going-to-prison]
+  
+end
+
+; ------------------------------------------------------------------- 
+
+
+to at-home
+  
+  ; ----------- Added FOR TASK 11.15 / GROUP 1 -----------------
+  if flagEvening = true [
+    ifelse fear-happened = false and flag_fear = 0 [
+      set fear (fear - (fear * 0.2))
+      set flag_fear 1
+    ] [set fear-happened false and flag_fear = 1]
+  ]
+    if flagMorning = true [
+      set flag_fear 0
+    ]
+  if plannedToDemonstrate [
+    if ticks mod 24 * 7 = (24 * 6 + 10) [
+      move-to one-of patches with [region = "townSquare"]
+         set next_state [ -> demonstrate ]
+    ]
+  ]
+ 
+  ; -------------------- ADDED FOR TASK 11.11 /GROUP 6 -------------------- 
+  ; Decides if the citisen is going to organize a demonstration based on its frustrations threshold 
+  ;DEBUG PRINT
+  ;print word "Frustration: " frustration 
+  if frustration >= frustThreshold [
+    ifelse frustration > 80[
+      update-belief create-belief "organize-demonstration" true
+      set next_state [ -> organize-demonstration ]   
+    ][
+   
+      ; Decides if the citisen is going to meet a friend based on its frustrations threshold 
+      ; -------------------- ADDED FOR TASK 11.7 /GROUP 9 -------------------- 
+      
+      update-belief create-belief "meet-friends" true 
+      set next_state [ -> meet-friends ]
+  
+    ]
+ 
+  ]
+  
+  
+  
+    ; -------------------- ADDED/GROUP 5 TASK 11.8 -------------------- 
+  
+ if frustration >= frustThreshold [
+    ifelse frustration > 90[
+      update-belief create-belief "demonstrate" true
+      set next_state [ -> demonstrate ]   
+    ][
+   
+      update-belief create-belief "stay-home" true 
+      set next_state [ -> at-home ]
+    ]
+  ]
+  ;----------------------------------------------------------------------
+  
+  
+  let work-belief-exist exist-beliefs-of-type "can-work"
+  
+  if work-belief-exist = true [ 
+  
+    ; Get the first element of the type "can-work", there should only be one of these elements
+    let work-belief first beliefs-of-type "can-work"
+    
+    let ok word "can work" item 1 work-belief
+    
+    if item 1 work-belief = true [
+      set next_state [ -> go-to-work ]
+    ]
+    
+  ] 
+  
+  ; -------------------- ADDED FOR TASK 7.72 /ANNA -------------------- 
+  if flagWeekend = true [
+    let hehe random 4
+    if hehe = 1 [
+      ;print (word who ": it's weekend!")
+      set next_state [-> walk-around-freely]
+    ]
+    if hehe = 2 and not flagEvening [ set next_state [-> use-social-media] ] ; ADDED FOR TASK 7.71 / Hedda
+  ]
+  
+  if not empty? temporaryFriendList [
+    foreach temporaryFriendList [
+      x -> 
+      send-citizen-msg "friend-request" "you want to be friends?" self x
+      set temporaryFriendList remove x temporaryFriendList
+    ]
+  ]
+  ;----------------------------------------------------------------------
+  
+end
+
+
+to go-to-factory
+  ; It is recommended that go-to-work function is used, but this function can be used if needed. 
+  ; The next state in go-to-work is at-workplace.
+   
+  ; set next_state [ -> at-factory ]
+end 
+
+to at-factory 
+  
+  ; If the agent did not manage 
+  if employed? = false [
+    set next_state [ -> walk-around-freely ]
+  ]
+  
+  ifelse entertained >= 10 [
+    set entertained (entertained - 10)
+  ] [
+    set entertained 0
+  ]
+  
+  ifelse flagEvening = true [
+    exit-work-building
+    
+    set factory-workers-current factory-workers-current - 1
+    set employed? false
+    set next_state [ -> walk-around-freely ]
+  ] [
+    move-at-work
+  ]
+  
+end
+
+to go-to-workplace
+  ; It is recommended that go-to-work function is used, but this function can be used if needed. 
+  ; The next state in go-to-work is at-workplace.
+end 
+
+to at-workplace
+  if salary = 0 [
+    set salary (random 30001) + 10000
+  ]
+
+  if time mod 24 = 12 [
+    let nbrOfAgents count citizens in-radius vision_range
+    if nbrOfAgents >= 5 [
+      let totalSalary 0
+      ask citizens in-radius vision_range [ set totalSalary totalSalary + salary ]
+      let averageSalary totalSalary / nbrOfAgents
+
+      if (averageSalary > salary) [
+        set frustration frustration + 1
+      ]
+
+      if (averageSalary <= salary and frustration > 0) [
+        set frustration frustration - 1
+      ]
+    ]
+    ;if frustration_value >= 0 [show frustration_value] ; for debugging, shows frustration_value of each worker
+  ]
+
+  ; This code should be replaced, it only exist for visual purposes.
+  ifelse flagEvening = true [
+    exit-work-building
+
+    set next_state [ -> go-home ]
+  ] [
+    move-at-work
+  ]
+end
+
+to go-to-entertainment
+  
+  ; let entertainment-patch patches with [ region = "eveningEntertainment" and doorway = true]
+  ; set entertainment-patch item 0 [region] of entertainment-patch
+  ; print entertainment-patch 
+  move-to locEntertainment
+  set next_state [ -> at-entertainment ]
+end 
+
+to at-entertainment
+  
+  if flagEvening = false [
+    set entertained random 21 + 80
+    set next_state [ -> go-home ]
+  ]
+  
+end 
+
+to go-to-university
+  ; It is recommended that go-to-work function is used, but this function can be used if needed. 
+  ; The next state in go-to-work is at-university.
+end
+
+to at-university
+  
+  ; This code should be replaced, it only exist for visual purposes.
+  ifelse flagEvening = true [
+    exit-work-building
+    
+    set next_state [ -> go-home ]
+  ] [
+    move-at-work
+  ]
+end
+
+to go-to-town-square
+end 
+
+to go-to-restaurant
+    if (frustration < 50)[move-to locRestaurant ]
+
+end
+
+to at-restaurant
+end 
+
+to go-to-volunteer-place
+  ; It is recommended that go-to-work function is used, but this function can be used if needed. 
+  ; The next state in go-to-work is at-volunteer-place.
+end 
+
+to at-volunteer-place
+
+  ; This code should be replaced, it only exist for visual purposes.
+  ifelse flagEvening = true [
+    exit-work-building
+    
+    set next_state [ -> go-home ]
+  ] [
+    move-at-work
+  ]
+end
+
+to hold-speech
+end 
+
+to walk-around-freely
+  random_walk
+  
+  let entertainment-belief-exist exist-beliefs-of-type "want-entertainment"
+  
+  if entertainment-belief-exist = true [
+  
+    ; Get the first element of the type "want-entertainment", there should only be one of these elements
+    let entertainment-belief first beliefs-of-type "want-entertainment"
+    
+    ifelse item 1 entertainment-belief = true and flagEvening = true [
+      set next_state [ -> go-to-entertainment ]
+    ] [
+      
+      if flagEvening = true [
+        set next_state [ -> go-home ]
+      ]
+    
+    ]
+    
+  ]
+  
+  ; -------------------- ADDED FOR TASK 7.72 /ANNA -------------------- 
+  let target nobody
+  let myGrievance G 
+  let match false
+  
+  let citizens-on-the-way other turtles with [breed = citizens] 
+  if any? citizens-on-the-way in-cone 1 180 [ 
+    set target min-one-of citizens-on-the-way [xcor + ycor]
+    ask target [ 
+      if abs (G - myGrievance) < 0.02 [
+        set match true
+        ;print (word who ": (Target) We have similar G! Target grievance: " G ", my grievance ("myself"): " myGrievance) ;flag, you can de-comment
+      ]
+    ]
+    if match = true AND not member? target temporaryFriendList [
+      set temporaryFriendList lput target temporaryFriendList 
+      ;print (word who ": i added the target: " target " to my temporaryFriendList") ; flag, you can de-comment
+    ]
+  ]
+  ; --------------------------------------------------------------------
+  
+end
+
+
+to make-friends
+end
+
+to meet-friends
+ ; print "MEET FRIENDS"
+end 
+
+to use-social-media
+  
+  ; -------------------- ADDED FOR TASK 7.71 /Group 6-------------------- 
+  ;login by adding citiziens ID to activeSocMediaList 
+  let myID who
+  ;set activeSocMediaList lput myID activeSocMediaList 
+  set activeSocMediaList lput turtle myID activeSocMediaList ; ***************** FIXED/ANNA 
+  ;print "online"
+  let myFrustration frustration
+  let myFear fear
+  let myFriendsList friendsList
+  
+  
+  ;be able to send messages and exchange information to the other members of the activeSocMediaList
+  ;Each agent has there own list witch active citizens
+  set myActiveSocMediaList activeSocMediaList ; 
+  ;set myActiveSocMediaList remove myID myActiveSocMediaList; remove the own id
+  set myActiveSocMediaList remove turtle myID myActiveSocMediaList; ; ***************** FIXED/ANNA 
+  
+  if not empty? myActiveSocMediaList[
+    foreach myActiveSocMediaList[
+      x ->
+      if (not (x = self)) [  ; ***************** FIXED/ANNA 
+        ask x [
+          ;if abs(frustration - myfrustration) < 2 [send-citizen-msg "chat-request" "Hey! We're like-minded, let's chat! " turtle x]
+          ;if abs(fear - myFear) < 2 [send-citizen-msg "chat-msg" "Hey! I'm scared too" turtle x]    
+          if abs(frustration - myfrustration) < 2 [send-citizen-msg "chat-request" "Hey! We're like-minded, let's chat! " self x]  ; ***************** FIXED/ANNA 
+          if abs(fear - myFear) < 2 [send-citizen-msg "chat-msg" "Hey! I'm scared too" self x]  ; ***************** FIXED/ANNA    
+        ]
+         ; ***************** FIXED/ANNA (moved out of ask x)
+        if (frustration > fear )[  ; if more frustration then fear add a new friend 
+            if not(member? x friendsList)[    ; to prevent dublication of citizens in list   
+              set friendsList lput x friendsList 
+              ;print (word who ": added to friendslist: " x)
+            ]
+        ]
+        
+        
+      ]
+    ]
+  ]
+
+  ;print (word who ": my friendsList: " friendsList)
+  
+  ;if evening logout
+  if flagEvening[
+    ;set activeSocMediaList remove myID activeSocMediaList 
+    set activeSocMediaList remove turtle myID activeSocMediaList  ; ***************** FIXED/ANNA 
+    ;print word "offline: " myID
+      ;print "gå hem jannneeeee"
+    set next_state [-> go-home]
+  ]
+
+ ; --------------------------------------------------------------------
+end
+
+; Sends demonstration-invites to all citizens believed to be on 'friendsList'
+to demo-inv
+  
+  ;let msg create-message "request"
+  ;set msg add-content "demonstrationRequest" msg
+  ;set msg add-multiple-receivers friendsList msg
+  ;set msg add-sender [who] of self msg
+  ;add-intention "send" msg
+  
+  ;***************** FIXED/ANNA 
+  if not empty? friendsList [
+    ;print (word who ": Trying to send demonstration invites. ")
+    foreach friendsList [
+      x -> send-citizen-msg "request" "demonstrationRequest" self x
+      ;print (word who ": Successfully send demonstration invite to: " x)
+    ]
+  ]
+  
+  
+  ;debug print
+  ;print word "friendslist: "friendsList
+end
+
+to organize-demonstration
+ ; print "ORGANIZE DEMONSTRATION"
+end
+
+to demonstrate
+  move-to one-of patches with [region = "townSquare"]
+end
+
+
+to going-to-prison
+  set next_state [-> at-prison]
+end 
+
+to at-prison
+  set next_state [-> walk-around-freely]
+end
+
+; Citizen moves towards their work place's door
+to go-to-work
+  let myWorkPlace placeOfWork
+  let targetPatch patches with [region = myWorkPlace and doorway = true]
+  ifelse any? targetPatch in-radius vision_range 
+  [
+    move-to one-of targetPatch
+    ; set next_state "move-at-work"
+    
+    if myWorkPlace = "factory"        [ set next_state [ -> at-factory ] ]
+    if myWorkPlace = "workPlace"      [ set next_state [ -> at-workplace ] ]
+    if myWorkPlace = "volunteerPlace" [ set next_state [ -> at-volunteer-place ] ]
+    if myWorkPlace = "university"     [ set next_state [ -> at-university ] ]
+    
+  ]
+  [  
+      let movementAllowence patches with [region = "empty" or region = "townSquare"] in-radius vision_range
+      move-to min-one-of movementAllowence [distance one-of targetPatch]  
+  ]
+end
+
+; Citizens make their way home via either empty patches or townsquare patches
+to go-home
+  let movementAllowence patches with [region = "empty" or region = "townSquare"] in-radius vision_range
+  let homeLocation homeLoc ; need to save as local variable or the distance function will break.
+  let tempPatches patches in-radius vision_range
+  ifelse member? homeLocation tempPatches [
+    move-to homeLocation
+    set next_state [ -> at-home ]
+  ] [
+    move-to min-one-of movementAllowence [distance homeLocation]
+  ]
+end
+
+
+;******************* MISCELLANEOUS FUNCTIONS *****************
+; These are procedures that can be called from states but are not states themselves.
+; For example the random walk procedure is called from walk-around-freely state, but this is not
+; a state that they are in. 
+
+
+; -------------------- ADDED FOR TASK 7.72 /ANNA -------------------- 
+to send-citizen-msg [message-type content sender receiver]
+  let msg create-message message-type	; create the message with the performative
+  set msg add-sender [who] of sender msg 	; add receiver to the message
+  set msg add-receiver [who] of receiver msg 	; add receiver to the message
+  set msg add-content content msg 	; add content to the message
+      
+  add-intention "send " msg 
+end 
+; --------------------------------------------------------------------
+
+; Move around inside the work region while at work, tries to stand alone on a patch.
+to move-at-work  
+  let myWorkPlace placeOfWork
+  let targets patches with [ region = myWorkPlace and count citizens-here = 0 ]
+  ifelse any? targets 
+  ; space available
+  [ move-to one-of targets ] 
+  ; every space occupied
+  [ move-to one-of patches with [ region = myWorkPlace ] ]
+end
+
+; Exit the work building by moving to the door patch (currently shown with the red patch)
+to exit-work-building
+  let myWorkPlace placeOfWork
+  let targets patches with [ region = myWorkPlace and doorway = true]
+  move-to one-of targets
+end
+
+; Moves the agent to a random patch that is currently not occupied and there are
+; no other turtles on that patch.
+to random_walk
+
+  ; Get all empty patches
+  let empty_patches patches in-radius vision_range with [not any? turtles-here]
+
+  if any? empty_patches [
+    ; Move to that patch 
+    let target one-of empty_patches
+    face target
+    move-to target 
+  ]
+
+end
+
+;Grupp 4, task 11.1
+;Returns true if frustration is biggger than fear, otherwise false and increases frustration
+to-report isFrustrationBiggerThanFear
+  ifelse frustration > fear [ report true]
+  [set frustration frustration + random 5
+   report false
+  ]
+end
+
+
+; -------------------- ADDED FOR TASK 8.11. 11.3 /GROUP 10 -------------------- 
+; Places 'demo-inv' on the intention-stack for all managers 
+to evaluate-manager 
+  if time = 115[
+    if exist-beliefs-of-type "manager"[
+      add-intention "demo-inv" "true"  
+      ;debug print 
+      ;print "in evaluate manager "  
+    ]
+  ]
+end
+
+to compare-frustration
+  let myFrustration frustration ;let myFrustration belief-content read-first-belief-of-type "frustration"
+  let otherFrustration 0
+  let id belief-content read-first-belief-of-type "compareTarget"
+  ask citizen id[
+    set otherFrustration frustration ;belief-content read-first-belief-of-type "frustration"
+  ]
+  ifelse myFrustration < otherFrustration[
+    set frustration myFrustration * 1.01 ;update-belief create-belief "frustration" myFrustration * 1.01
+  ]
+  [
+    set frustration myFrustration * 0.99 ;update-belief create-belief "frustration" myFrustration * 0.99
+  ]
+  remove-belief create-belief "compareTarget" id
+  add-belief create-belief "talkedToday" id
+end
+
+to reset-talkedToday
+   let talk-list beliefs-of-type "talkedToday"
+   if ( not empty? talk-list ) [
+    foreach talk-list [
+      a -> remove-belief a
+    ]
+  ]
+end
+
+to update-frustration
+  let id [who] of one-of (citizens in-radius vision_range)
+  if ( member? id friendsList ) and ( not exists-belief create-belief "talkedToday" id )[
+    add-belief create-belief "compareTarget" id
+    add-intention "compare-frustration" "true"
+  ]
+end
+
+to check-talked-today
+  if ( flagMorning ) and ( exists-belief create-belief "resetTime" true )[
+    reset-talkedToday
+    update-belief create-belief "resetTime" false
+  ]
+  if flagEvening [
+    update-belief create-belief "resetTime" true
+  ]
+end
+; --------------------------------------------------------------------
+
+
