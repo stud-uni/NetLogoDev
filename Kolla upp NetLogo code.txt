@@ -1,0 +1,63 @@
+Kolla upp NetLogo code
+
+; create cops
+  create-cops round (initial-cop-density * .01 * count patches) [
+    move-to one-of patches with [ not any? turtles-here ]
+    display-cop
+  ]
+
+; create agents
+  create-agents round (initial-agent-density * .01 * count patches) [
+    move-to one-of patches with [ not any? turtles-here ]
+    set heading 0
+    set risk-aversion random-float 1.0
+    set perceived-hardship random-float 1.0
+    set active? false
+    set jail-term 0
+    display-agent
+  ]
+
+
+ask citizens [if count citizens with [active = true] in-radius vision > 0 [set saw-revolting-people? true]
+    let see-revolting count citizens in-radius vision with [active = true]
+    let see-all count citizens in-radius vision
+    set see-perct-revolt see-revolting / see-all
+    ]
+
+
+;; create policemen
+  create-policemen round (initial-policeman-density * .01 * count patches) [
+    move-to one-of patches with [not any? turtles-here]
+    display-policeman
+  ]
+
+
+to move
+    let targets neighborhood with   ;candidate patches are empty or contain only jailed citizens
+                [(not any? policemen-here) and (not any? revolutionaries-here) and (all? citizens-here [jail-term > 0])]
+    if any? targets [ move-to one-of targets ]
+end
+
+
+to move ; turtle procedure
+  if movement? or breed = cops [
+    ; move to a patch in vision; candidate patches are
+    ; empty or contain only jailed agents
+    let targets neighborhood with [
+      not any? cops-here and all? agents-here [ jail-term > 0 ]
+    ]
+    if any? targets [ move-to one-of targets ]
+  ]
+
+
+to enforce
+  if any? (agents-on neighborhood) with [ active? ] [
+    ; arrest suspect
+    let suspect one-of (agents-on neighborhood) with [ active? ]
+    move-to suspect  ; move to patch of the jailed agent
+    ask suspect [
+      set active? false
+      set jail-term random max-jail-term
+    ]
+  ]
+
