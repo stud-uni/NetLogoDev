@@ -61,12 +61,13 @@
 __includes [
     "citizens.nls"
     "cops.nls"
+    "vid.nls" ; contains the code for the recorder. You also need to activate the vid-extension and the command at the end of setup
 ]
 ; ********************end included files ********
 
 ; ************ EXTENSIONS *****************
 extensions [
-; vid ; used for recording of the simulation
+ vid bitmap; used for recording of the simulation
 ]
 ; ********************end extensions ********
 
@@ -164,6 +165,10 @@ to setup
   ; must be last in the setup-part:
   reset-ticks
   ;recorder
+  if vid:recorder-status = "recording" [
+    if Source = "Only View" [vid:record-view] ; records the plane
+    if Source = "With Interface" [vid:record-interface] ; records the interface
+  ]
 
 end
 
@@ -192,6 +197,11 @@ to go
       ]
   ]
 
+  ;recorder
+ if vid:recorder-status = "recording" [
+    if Source = "Only View" [vid:record-view] ; records the plane
+    if Source = "With Interface" [vid:record-interface] ; records the interface
+  ]
 
 end ; - to go part
 @#$#@#$#@
@@ -224,9 +234,9 @@ ticks
 
 SLIDER
 23
-81
+397
 137
-114
+430
 num-citizens
 num-citizens
 1
@@ -255,10 +265,10 @@ NIL
 1
 
 BUTTON
-128
-26
-191
-59
+21
+73
+84
+106
 go
 go
 T
@@ -273,9 +283,9 @@ NIL
 
 SLIDER
 23
-121
+437
 136
-154
+470
 num-cops
 num-cops
 0
@@ -287,10 +297,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-25
-185
-135
-218
+156
+398
+248
+431
 citizen-vision
 citizen-vision
 1
@@ -302,10 +312,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-25
-223
-137
-256
+156
+436
+248
+469
 cop-vision
 cop-vision
 1
@@ -315,6 +325,88 @@ cop-vision
 1
 NIL
 HORIZONTAL
+
+BUTTON
+21
+500
+109
+533
+start recorder
+start-recorder
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+19
+542
+108
+575
+reset recorder
+reset-recorder
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+18
+584
+107
+617
+save recording
+save-recording
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+124
+503
+244
+548
+NIL
+vid:recorder-status
+3
+1
+11
+
+CHOOSER
+124
+559
+243
+604
+Source
+Source
+"Only View" "With Interface"
+1
+
+TEXTBOX
+18
+468
+253
+496
+_______________________________________
+11
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?

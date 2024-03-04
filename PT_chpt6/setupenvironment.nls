@@ -38,65 +38,57 @@
 
 ;---- Procedure
 to setup-environment
+    ; setup of all patches
+  
   ask patches [
     set region "empty"
-    set doorway false
+    set neighborhood patches in-radius citizen-vision
+    ;set doorway false
   ]
   
-  ;---- Place for volunteers
-  create-building 1 1 3 violet "volunteerPlace"
+  ;---- Place for Social Events
+  create-building 1 1 3 violet "SocialEvents"
   
   ;---- Evening entertainment place
-  create-building 1 2.5 2 pink "eveningEntertainment"
+  create-building 1 2.5 2 pink "Cinema"
   
   ;---- Factory
-  create-building 1 3.5 6 brown "factory"
+  create-building 1 3.5 6 brown "Factory"
   
   ;---- Work place
-  create-building 1 2 3 yellow "workPlace"
+  create-building 1 2 3 yellow "Workplace"
   
   ;---- Town Square
   ;create-building 2 2 10 green "townSquare"
-  create-building 2 2 20 green "townSquare"
+  create-building 2 2 20 green "TownSquare"
   
   ;---- University
-  create-building 2 3.5 4 magenta "university"
+  create-building 2 3.5 4 magenta "University"
+  
+  ;-----Espresso House
+  create-building 1.6 3.5 2 blue "EspressoHouse"
   
   ;---- Restaurants
-  create-building 3 1 2 cyan "restaurant"
+  create-building 3 1 2 cyan "Restaurant"
   
 
   ;---- Police Station
-  create-building 3 2 4 96 "policeStation"
+  create-building 3 2 4 96 "PoliceStation"
   
-  ask cops [
-    let tempPatch one-of patches with [region = "policeStation"]
-    setxy [pxcor] of tempPatch [pycor] of tempPatch
-  ]
-  
+ 
   ;---- Prison
-  create-building 3 3 8 gray "prison"
+  create-building 3 3 8 gray "Prison"
   
   ;---- Houses
-  let emptyPatches patches with [region = "empty"]
-  let tempPatch 0
-  let counter 0
-  let agentID counter
-  loop [
-    set tempPatch one-of emptyPatches with [region = "empty"]
-    
-    ask tempPatch [
+  ;
+  ; build enough houses, assume average of 4 citizens per house
+  let maxnrhouses count patches with [region = "empty"]
+  if maxnrhouses > floor (num-citizens / 4) [
+    let emptyPatches patches with [region = "empty"]
+    ask n-of floor (num-citizens / 4) emptyPatches [
       set region "house"
       set pcolor 74
     ]
-    
-    ask citizens with [who = counter][
-      set homeLoc tempPatch
-      setxy [pxcor] of tempPatch [pycor] of tempPatch
-    ]
-    
-    set counter counter + 1
-    if count citizens = counter [stop]
   ]
   
   
@@ -125,15 +117,15 @@ to create-building [x y buildingSize buildingColor regionName]
     set pcolor buildingColor
     set region regionName
   ]
-  if not (regionName = "townSquare") [
-    ask patches with [
-      pxcor = round (building-xcor) and
-      pycor = round (building-ycor + building-half-size)
-    ] [
-      set pcolor red
-      set doorway true
-    ]
-  ]
+;  if not (regionName = "TownSquare") [
+;    ask patches with [
+;      pxcor = round (building-xcor) and
+;      pycor = round (building-ycor + building-half-size)
+;    ] [
+;      set pcolor red
+;      set doorway true
+;    ]
+;  ]
   
   if showPatchLabels [
     ask patches with [
@@ -146,15 +138,15 @@ to create-building [x y buildingSize buildingColor regionName]
   
 
   ; Set the global variable to the location of the building. 
-  if regionName = "prison" [ set locPrison patch building-xcor building-ycor ]
-  if regionName = "factory" [ set locFactory patch building-xcor building-ycor ]
-  if regionName = "workPlace" [ set locWork patch building-xcor building-ycor ]
-  if regionName = "townSquare" [ set locTownSquare patch building-xcor building-ycor ]
-  if regionName = "university" [ set locUni patch building-xcor building-ycor ]
-  if regionName = "restaurant" [ set locRestaurant patch building-xcor building-ycor ]
-  if regionName = "policeStation" [ set locPolStation patch building-xcor building-ycor ]
-  if regionName = "volunteerPlace" [ set locVolunteerPlace patch building-xcor building-ycor ]
-  if regionName = "eveningEntertainment" [ set locEntertainment patch building-xcor building-ycor ]
+  if regionName = "Prison" [ set locPrison patch building-xcor building-ycor ]
+  if regionName = "Factory" [ set locFactory patch building-xcor building-ycor ]
+  if regionName = "Workplace" [ set locWork patch building-xcor building-ycor ]
+  if regionName = "TownSquare" [ set locTownSquare patch building-xcor building-ycor ]
+  if regionName = "University" [ set locUni patch building-xcor building-ycor ]
+  if regionName = "Restaurant" [ set locRestaurant patch building-xcor building-ycor ]
+  if regionName = "PoliceStation" [ set locPolStation patch building-xcor building-ycor ]
+  if regionName = "SocialEvents" [ set locSocialEvents patch building-xcor building-ycor ]
+  if regionName = "Cinema" [ set locCinema patch building-xcor building-ycor ]
   
   
 end

@@ -1,0 +1,81 @@
+; File with the "to-go"- functionality of citizen-agents
+
+; FILE HISTORY:
+
+; 2024-01-29 Initial template, gks
+; 
+;
+;---------------------------------------------------
+
+to setup-citizens
+  ; setup citizen-agents
+  create-citizens num-citizens [
+    set label who
+    set shape "person" 
+    set size 1
+    set color white
+    set inPrison? false
+    move-to one-of patches with [region = "house"]
+    ; save the home location
+    set homeLoc patch-here
+    setxy [pxcor] of homeLoc [pycor] of homeLoc 
+    set friendsList []
+  ]
+
+end
+
+
+to citizen_behavior
+  
+; checking if the citizen is in prison
+ifelse inPrison? = true [
+    set jailtime jailtime + 1 ;counting the time in prison
+    print (word "citizen " who "is in prison since: " jailtime)
+    if jailtime > jailsentence [; released from prison
+      set jailtime 0
+      ; move forward where there are no cops and is not prison
+      ;let places neighborhood with [not any? cops-here and region != "Prison"]
+      let places neighborhood with [not any? cops-here and region = "empty" or region = "TownSquare"]
+      if any? places [move-to one-of places]
+      set inPrison? false
+      set color yellow
+      print (word "citizen " who "is released from prison")
+    ]
+  ]
+  [;else checking if cops are within vision radius
+    let nearby-police other cops in-radius citizen-vision
+    if any? nearby-police [
+      let police min-one-of nearby-police [distance myself]; identify the cop that is nearest
+      if police != nobody [
+        print (word " citizen: " who " sees cop: " police)
+        if (distance police) > 0 [ ;check if the distance to this police is 0 then just give up, since heading produces errors 
+          set heading (towards police) + 180 ; face opposite from the nearest police
+        ] 
+      ]  
+    ]  
+    ; move forward where there are no cops and is not prison
+    ;let places neighborhood with [not any? cops-here and region != "Prison"]
+    let places neighborhood with [not any? cops-here and region = "empty" or region = "TownSquare"]
+    if any? places [move-to one-of places]
+    ;alternative that is more random movement
+    ;  rt random 50
+    ;  lt random 50
+    ;  fd 1
+  ]
+end
+
+; if asked to go to prison  
+to gotoprison 
+  ; set flag
+  set inPrison? true
+  set color red
+  ; move to prison into an own cell (=own patch)
+  let prisoncell one-of patches with [not any? turtles-here and region = "Prison"]
+  ifelse (prisoncell != nobody) [move-to one-of patches with [not any? turtles-here and region = "Prison"]]
+  ; else 
+  [print "Prison is too crowded, more than one prisoner in a cell"
+  move-to one-of patches with [region = "Prison"]]
+  
+  
+  print (word "citizen: " who " is put into prison")
+end

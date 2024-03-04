@@ -1,64 +1,165 @@
-; DIS-Project_vt23 (temporary name-please find a better one!!)
-; test of a change to see if this works with github
+; DIS-PT_chpt2
+; template for the programming task with cops and citizen agents
+;
+; HOW TO WORK WITH THIS FILE:
+;
+; 1. Bransch this file from Github for your group
+; 2. Divide the work from the task to your group members, so that every group member has at least one own task
+; 3. Make individual bransches per group member from the group-bransch that you made under 1.
+; 4. Start with your individual tasks development and make push- and pulls between your individual bransches as needed
+; 5. When the individual tasks are finished you need to merge the different parts back into the original group-bransch
+; 6. Make sure that the final version works before uploading it under PT_chpt.2 on Canvas.
 ;
 ;
+
+
+
+;development comments
 ;
-; Version History: (set date, changes and by whom everytime you add or change something)
-; 2023-04-10 Initial Template by Gion K Svedberg (gks)
-; 2023-04-13 Added belief can-work, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
-; 2023-04-14 Added update time function, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
-; 2023-04-27 Added template beliefs, Group 8 (Ingvar Pétursson, Hampus Oxenholt, Adam Makowski)
-; 2023-05-11 Added town-square-matrix in setup and matrix in extension, Group 7(Anton Satow, Zainab Alfredji, Ted Ljungsten)
-; 2023-05-18 Group10 (Felix B, Lucas H, Johan Ay)
-; - Added method find-frustrated
-; - Added settings for flagManger in update-time-flags
+;1-different ways to find other agents within a vision range:
+; a) if they are neighbors to the agent looking (probably includes oneself as well?)
+;let target one-of citizens-on neighbors
+; b) if they look within a radius (360 degrees around?)
+;set target one-of other citizens in-radius 2
+;let police one-of other cops in-radius 2
+
+;let nearby-officers other turtles with [breed = cops] in-radius (vision_range * 3)
+;set target min-one-of nearby-officers [xcor + ycor]
+;
+; c) within cones
+;set target turtles-on patches in-cone 3 60
+;set target min-one-of other turtles in-cone 3 60 [distance myself]
+
+;2-finding a patch in the neighborhood to move to that does not contain agents of a certain breed
+;use patches by letting each patch define its neighborhood
+;-requires own patch-variable 'neighborhood'
+;patches-own [
+;  neighborhood        ; surrounding patches within the vision radius
+;]
+; -requires to ask the patches to set their variable neighborhood to the patches within their in-radius vision
+;ask patches [
+;  set neighborhood patches in-radius vision ; vision is a variable, set for example by ruler
+; ]
+;
+;- moving to a patch that contains no police
+;to move
+;  let targets neighborhood with [not any? cops-here]
+;  if any? targets [move-to one-of targets]
+;
+;3- cops finding citizens close enough nearby to arrest
+; if any? (citizens-on neighborhood) with [ active? ] [
+;    let suspect one-of (citizens-on neighborhood) with [ active? ]
+;    move-to suspect  ; move to patch of the suspect
+;    ask suspect [
+;      set active? false
+;      set jail-term random max-jail-term
+;      go-to prison
+;    ]
 
 
 ; ************ INCLUDED FILES *****************
 __includes [
-    "ODD.nls" ; contains all the the breeds of the agents, with the global and local variables. Use this file as the ODD (Overview, Design concepts and Details) protocol to syncronize the development
-    "bdimod.nls" ; modified version of the BDI (beliefs, desires, intentions) -extension. Allows certain intentions to pass values along
-    "communicationmod.nls" ; describe
     "setupenvironment.nls" ; setup-functions for setting up the environment with houses town-square, work-places, prison, police-station, restaurants, ....
-    "setupagents.nls"; creates the agents with their setup initializations
     "citizens.nls"
     "cops.nls"
+    "vid.nls" ; contains the code for the recorder. You also need to activate the vid-extension and the command at the end of setup
 ]
 ; ********************end included files ********
 
 ; ************ EXTENSIONS *****************
 extensions [
-; vid ; used for recording of the simulation
-; array ; uncomment if you need to use arrays
-; table ; uncomment if you need to use tables
- matrix ; uncomment if you need to use matrices
+ vid bitmap; used for recording of the simulation
 ]
 ; ********************end extensions ********
 
+;****************** INITIAL AND DEFINITIONS PART **********
+;
+;----- Breeds of agents
+breed [citizens citizen]  ;
+breed [cops cop] ;
+
+globals [
+  ;
+  max-jailterm
+  ;----- Time variables
+  time; One tick represents x minutes, time contains the sum of minutes for a day
+  flagMorning ; true if it is morning, e.g. time to get up
+  flagEvening ; true if it is evening
+  flagWeekend ; true if it is a weekend (2-days, Saturday and Sunday)
+
+
+  ;----- Spatial units, locations
+  locPrison ; location of the prison
+  locPolStation; location of the police station
+  locFactory; location of the factory
+  locUni; location of the university
+  locWork; location of the work-place
+  locTownSquare; location of the town square
+  locCinema; location of the entertainment-place
+  locRestaurant; location of the restaurant
+  locSocialEvents; location of the volunteer place
+]
+
+;---- General agent variables
+turtles-own [
+  ;speed
+]
+
+;---- Specific, local variables of patches
+patches-own [
+  neighborhood        ; surrounding patches within the vision radius
+  region              ; used for identification of different regions
+]
+
+;---- Specific, local variables of citizen-agents
+citizens-own [
+  ;citizen-vision is set by ruler 'citizen-vision'
+  inPrison?
+  jailtime
+  jailsentence
+  homeLoc; home location, where the agent lives
+  friendsList; list with id of closest friends
+]
+;---- Specific, local variables of cop-agents
+cops-own [
+  ;cop-vision is set by slider
+  cop-speed
+]
+
+
+
 
 ; ******************* SETUP PART *****************
-; setup of the environment, the different agents and time
+; setup of the environment, and the different agents
 to setup
   clear-all
+  ; define global variables that are not set as sliders
+  set max-jailterm 50
 
-  ; Set all global variables
-  set factory-workers-current-max 10
 
-  setup-agents ; setup of citizen and cop - agents
-  setup-environment ; setup of houses, town-square, work-places, prison, police-station, restaurants, but also environment variables, such as time, ....
-  set town-square-matrix matrix:make-constant 3 3 0
+  ; setup of the environment:
+  setup-environment ;
+  ; setup of all patches
 
-  ; set-up of debug flags
-  set debug-general true
-  set debug-time true ; Prints the time in the terminal
-  ;set debug-xxx true ; specific debug flags, replace xxx with a specifier
+  ; setup citizens
+  setup-citizens
+  ;---- setup cops
+  setup-cops
+
+
 
   ; must be last in the setup-part:
   reset-ticks
-  ;setup-plots
+  ;recorder
+  if vid:recorder-status = "recording" [
+    if Source = "Only View" [vid:record-view] ; records the plane
+    if Source = "With Interface" [vid:record-interface] ; records the interface
+  ]
+
 end
 
 ; **************************end setup part *******
+
 
 
 ; ******************* TO GO/ STARTING PART ********
@@ -66,63 +167,51 @@ end
 to go
   ;---- Basic functions, like setting the time
   ;
+  tick ;- update time
   update-time-flags ;- update time
-  clear-links
 
   ;---- Agents to-go part -------------
   ; Cyclic execution of what the agents are supposed to do
-  ; Trying to implement a Hybrid-Agent architecture with a ractive part running the intentions on
-  ; the intention stack and the proactive part with a deliberation of states based on beliefs
   ;
   ask turtles [
     ; Reactive part based on the type of agent
     if (breed = citizens) [
-      process-citizen-msg
-      perceive-citizen-env
+      citizen_behavior ; code as defined in the include-file "citizens.nls"
       ]
     if (breed = cops) [
-      process-cop-msg
-      perceive-cop-env
+      cop_behavior ; code as defined in the include-file "cops.nls"
       ]
-    ; Execute all of the intentions on the intention-stack as reactive behaviors
-    while [not empty? intentions] [execute-intentions] ; while loop that executes all of the intentions on the stack, make sure intentions are removed from stack!
+  ]
 
-    ; Proactive part based on finite state machine, contained in the include-files "citizens.nls" and "cops.nls"
-    run current_state
-    ; test if the following loop is needed or not
-    ; while [not empty? intentions] [execute-intentions] ; while loop that executes all of the intentions on the stack
-    set current_state next_state
+  ;recorder
+ if vid:recorder-status = "recording" [
+    if Source = "Only View" [vid:record-view] ; records the plane
+    if Source = "With Interface" [vid:record-interface] ; records the interface
   ]
 
 end ; - to go part
 
 
+
+; OBSERVER FUNCTIONS
+
+
+
+;-----------------------
+
+
+; TIME FUNCTIONS
 to update-time-flags
   ; The time is measured in ticks where one tick is an hour.
   ; The time is tracked in the time variable and this variable is
   ; reset every week (or every 168 hours).
 
-  ; Increase time one step
-  tick
+
 
   ; Set the time
   set time (time + 1)
   set time time mod 168
 
-  ; -------------------- ADDED FOR TASK 8.11 /GROUP 10 ----------------
-  if time = 0 [
-    ask citizens [
-      set flagManager 0
-      ;DEBUG print
-      ;print("RESETING MANAGERS")
-      if ( exist-beliefs-of-type "manager" ) and (( belief-content read-first-belief-of-type "manager" ) = true )[
-        remove-belief read-first-belief-of-type "manager"
-        set color white
-      ]
-    ]
-
-  ]
-  ; -------------------------------------------------------------------
 
   ; Determine if it is morning, evening or weekend
   let hour-of-day time mod 24
@@ -138,13 +227,6 @@ to update-time-flags
   ; Check if it is evening
   ifelse (16 <= hour-of-day and hour-of-day <= 22)[
     set flagEvening true
-  ; -------------------- ADDED FOR TASK 8.11 /GROUP 10 ----------------
-    if flagManager = 0 and (time >= 110)[
-      ;print("PRE-FINDING")
-      set flagManager 1
-      find-frustrated
-    ]
-  ; -------------------------------------------------------------------
 
   ] [
     set flagEvening false
@@ -157,54 +239,18 @@ to update-time-flags
     set flagWeekend false
   ]
 
-  if debug-time = true [
-    print word "Time: " time
-  ]
-end
+ ;print word "Time: " time
 
-
-; -------------------- ADDED FOR TASK 8.11 /GROUP 10 ----------------
-; Finds the 3 most frustrated citizens and gives them the belief of being managers of demonstrations (task 8.11)
-to find-frustrated
-  ;print("ENTERED FINDER")
-  let angryValue []
-  let angryId []
-  let value 0
-  ask citizens[
-    let angryVal frustration ;belief-content read-first-belief-of-type "Frust"
-    set angryValue lput angryVal angryValue
-    set angryValue sort angryValue
-    set angryValue reverse angryValue
-  ]
-  let index 0
-  while [ index < 3 ] [
-    set value item index angryValue
-    ask citizens[
-      let angryVal frustration ;belief-content read-first-belief-of-type "Frust"
-      if angryVal = value [
-        let id [who] of self
-        set angryId lput id angryId
-        ask turtle id [
-          add-belief create-belief "manager" true
-          print (word who ": i am a manager." )
-          set color red]
-      ]
-    ]
-    set index index + 1
-  ]
-  set angryValue []
-  set angryId []
 end
-; -------------------------------------------------------------------
 @#$#@#$#@
 GRAPHICS-WINDOW
-225
-15
-1404
-618
+549
+10
+1731
+614
 -1
 -1
-17.48
+17.5224
 1
 10
 1
@@ -224,37 +270,26 @@ GRAPHICS-WINDOW
 ticks
 30.0
 
-SWITCH
-23
-169
-156
-202
-show-intentions
-show-intentions
-1
-1
--1000
-
 SLIDER
 23
-81
-211
-114
-num-agents
-num-agents
-5
-100
-100.0
+397
+137
+430
+num-citizens
+num-citizens
+1
+500
+122.0
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-23
-25
-86
-58
+22
+24
+85
+57
 setup
 setup
 NIL
@@ -268,10 +303,10 @@ NIL
 1
 
 BUTTON
-147
-25
-210
-58
+21
+73
+84
+106
 go
 go
 T
@@ -284,59 +319,138 @@ NIL
 NIL
 1
 
-SWITCH
-23
-213
-156
-246
-show_messages
-show_messages
-1
-1
--1000
-
-SWITCH
-22
-256
-156
-289
-show_beliefs
-show_beliefs
-1
-1
--1000
-
-SWITCH
-22
-298
-155
-331
-show_lines
-show_lines
-1
-1
--1000
-
 SLIDER
 23
-121
-211
-154
-perc-cops
-perc-cops
+437
+136
+470
+num-cops
+num-cops
 0
-90
-6.0
+500
+10.0
 1
 1
 NIL
 HORIZONTAL
 
+SLIDER
+156
+398
+248
+431
+citizen-vision
+citizen-vision
+1
+10
+1.0
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+156
+436
+248
+469
+cop-vision
+cop-vision
+1
+100
+1.0
+0.1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+21
+500
+109
+533
+start recorder
+start-recorder
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+19
+542
+108
+575
+reset recorder
+reset-recorder
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+18
+584
+107
+617
+save recording
+save-recording
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+124
+503
+244
+548
+NIL
+vid:recorder-status
+3
+1
+11
+
+CHOOSER
+124
+559
+243
+604
+Source
+Source
+"Only View" "With Interface"
+0
+
+TEXTBOX
+18
+468
+253
+496
+_______________________________________
+11
+0.0
+1
+
 SWITCH
-22
-343
-155
-376
+26
+337
+163
+370
 showPatchLabels
 showPatchLabels
 0
